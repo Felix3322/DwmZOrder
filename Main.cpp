@@ -321,7 +321,8 @@ namespace
         job->targetTitle = caption(job->operation.request.target.hwnd);
         job->referenceTitle = caption(job->operation.request.reference.hwnd);
         UpdateEnabled();
-        Log(L"正在处理，请稍候… / Working…\r\n操作期间仍可移动窗口。 / The window remains responsive.");
+        Log(app::Local(L"正在处理，请稍候…\r\n操作期间仍可移动窗口。",
+            L"Working…\r\nThe window remains responsive while the operation runs."));
         try
         {
             g.worker = std::thread([job]
@@ -333,15 +334,15 @@ namespace
                 }
                 catch (const std::exception& e)
                 {
-                    job->error = L"操作失败 / Operation failed: ";
+                    job->error = app::Local(L"操作失败：", L"Operation failed: ");
                     for (const char* p = e.what(); *p; ++p) job->error += static_cast<wchar_t>(static_cast<unsigned char>(*p));
                     job->operation.reply.response.status = Status::InternalException;
                 }
-                catch (...) { job->error = L"未知异常 / Unexpected exception"; job->operation.reply.response.status = Status::InternalException; }
+                catch (...) { job->error = app::Local(L"发生未知异常。", L"An unexpected exception occurred."); job->operation.reply.response.status = Status::InternalException; }
                 PostMessageW(job->owner, Completed, 0, 0);
             });
         }
-        catch (...) { g.busy = false; g.job.reset(); UpdateEnabled(); Log(L"无法启动工作线程 / Cannot start worker"); }
+        catch (...) { g.busy = false; g.job.reset(); UpdateEnabled(); Log(app::Local(L"无法启动操作线程。", L"Could not start the operation thread.")); }
     }
 
     void Start(Action action)
@@ -352,24 +353,27 @@ namespace
         request.position = static_cast<Position>(SendMessageW(g.position, CB_GETCURSEL, 0, 0));
         request.maintain = SendMessageW(g.maintain, BM_GETCHECK, 0, 0) == BST_CHECKED;
         if (action != Action::Stop && !Identity(g.target, request.target))
-        { Log(L"请选择有效窗口，或输入十进制 / 0x 十六进制 HWND。\r\nSelect a window or enter its decimal / 0x hexadecimal HWND."); return; }
+        { Log(app::Local(L"请选择有效窗口，或输入十进制 / 0x 十六进制窗口句柄。", L"Select a valid window or enter its decimal or 0x hexadecimal handle.")); return; }
         if (action == Action::Apply && request.position >= Position::Before
             && (!Identity(g.reference, request.reference) || request.reference.hwnd == request.target.hwnd))
-        { Log(L"请选择同一桌面上的另一个参照窗口。\r\nSelect another reference window on the same desktop."); return; }
+        { Log(app::Local(L"请选择同一桌面上的另一个参照窗口。", L"Select another reference window on the same desktop.")); return; }
         if (action == Action::Stop && MessageBoxW(g.window,
-            L"将停止当前会话排序代理的全部保持，并恢复系统顺序。\nStop all ordering maintenance in this session and restore system order?",
-            L"停止全部 / Stop all", MB_OKCANCEL | MB_ICONQUESTION) != IDOK) return;
+            app::Local(L"这会停止当前会话的全部持续保持，并恢复系统顺序。是否继续？",
+                L"This stops all maintained ordering in the current session and restores system order. Continue?"),
+            app::Local(L"停止全部", L"Stop all"), MB_OKCANCEL | MB_ICONQUESTION) != IDOK) return;
         Begin(job);
     }
 
     void Close()
     {
-        if (g.busy) { g.closePending = true; Log(L"等待当前操作完成后关闭… / Closing after the current operation finishes…"); return; }
+        if (g.busy) { g.closePending = true; Log(app::Local(L"当前操作完成后关闭…", L"Closing after the current operation finishes…")); return; }
         g.closePending = false;
         if (g.held.hwnd)
         {
-            const int choice = MessageBoxW(g.window, L"此工具可能仍在持续保持窗口。关闭前恢复吗？\n是：恢复后关闭。否：保留保持并退出。\n\nThis tool may still be maintaining a window. Restore before closing?\nYes: restore and close. No: leave maintenance running.",
-                L"退出 / Exit", MB_YESNOCANCEL | MB_ICONQUESTION);
+            const int choice = MessageBoxW(g.window,
+                app::Local(L"此工具可能仍在持续保持窗口。关闭前恢复吗？\n\n是：恢复后关闭。\n否：保留保持并退出。",
+                    L"This tool may still be maintaining a window. Restore before closing?\n\nYes: restore and close.\nNo: leave maintenance running."),
+                app::Local(L"退出", L"Exit"), MB_YESNOCANCEL | MB_ICONQUESTION);
             if (choice == IDCANCEL) return;
             if (choice == IDYES)
             {
@@ -402,7 +406,7 @@ namespace
         {
             if (job->error.empty() && job->operation.reply.response.status == Status::Ok) { DestroyWindow(g.window); return; }
             g.closePending = false;
-            Log(Text(g.log) + L"\r\n\r\n恢复未确认成功，工具保持打开。\r\nRestore was not confirmed; the tool remains open.");
+            Log(Text(g.log) + L"\r\n\r\n" + app::Local(L"恢复未确认成功，工具保持打开。", L"Restore was not confirmed; the tool remains open."));
         }
         else if (g.closePending) Close();
     }
@@ -412,26 +416,27 @@ namespace
         g.dpi = GetDpiForWindow(g.window);
         g.font = CreateFontW(-Px(15), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
             CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        g.title = Item(L"STATIC", L"DWM Order Tool 1.0.2", 0);
-        g.scope = Item(L"STATIC", L"跨 Band 合成排序；鼠标命中、焦点不变。\r\nComposition order only; input and focus are unchanged.", 0);
-        Item(L"BUTTON", L"管理员重启 / Elevate", AdminId, WS_TABSTOP);
-        Item(L"BUTTON", L"刷新 / Refresh", RefreshId, WS_TABSTOP);
-        g.targetLabel = Item(L"STATIC", L"目标 / Target", 0);
-        g.referenceLabel = Item(L"STATIC", L"参照 / Reference", 0);
-        g.positionLabel = Item(L"STATIC", L"位置 / Position", 0);
+        g.title = Item(L"STATIC", app::Local(L"DWM 窗口排序 1.0.3", L"DWM Window Order 1.0.3"), 0);
+        g.scope = Item(L"STATIC", app::Local(L"跨 Band 合成排序；鼠标命中和焦点不变。", L"Changes composition order across bands; input and focus stay unchanged."), 0);
+        Item(L"BUTTON", app::Local(L"以管理员身份重新启动", L"Restart as administrator"), AdminId, WS_TABSTOP);
+        Item(L"BUTTON", app::Local(L"刷新窗口列表", L"Refresh window list"), RefreshId, WS_TABSTOP);
+        g.targetLabel = Item(L"STATIC", app::Local(L"目标窗口", L"Target window"), 0);
+        g.referenceLabel = Item(L"STATIC", app::Local(L"参照窗口", L"Reference window"), 0);
+        g.positionLabel = Item(L"STATIC", app::Local(L"目标位置", L"Target position"), 0);
         g.target = Item(L"COMBOBOX", L"", TargetId, CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP);
         g.reference = Item(L"COMBOBOX", L"", ReferenceId, CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP);
         SendMessageW(g.target, CB_LIMITTEXT, 512, 0); SendMessageW(g.reference, CB_LIMITTEXT, 512, 0);
         g.position = Item(L"COMBOBOX", L"", PositionId, CBS_DROPDOWNLIST | WS_TABSTOP);
-        for (const auto* text : {L"合成最前 / Front", L"合成最后 / Back", L"参照上方 / Above reference", L"参照下方 / Below reference"})
+        for (const auto* text : {app::Local(L"最前方", L"Frontmost"), app::Local(L"最后方", L"Backmost"),
+            app::Local(L"参照窗口上方", L"Above reference"), app::Local(L"参照窗口下方", L"Below reference")})
             SendMessageW(g.position, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(text));
         SendMessageW(g.position, CB_SETCURSEL, 0, 0);
-        g.maintain = Item(L"BUTTON", L"持续保持 / Maintain", MaintainId, BS_AUTOCHECKBOX | WS_TABSTOP);
+        g.maintain = Item(L"BUTTON", app::Local(L"持续保持此顺序", L"Maintain this order"), MaintainId, BS_AUTOCHECKBOX | WS_TABSTOP);
         SendMessageW(g.maintain, BM_SETCHECK, BST_UNCHECKED, 0);
-        Item(L"BUTTON", L"读取顺序 / Read order", QueryId, WS_TABSTOP);
-        Item(L"BUTTON", L"应用顺序 / Apply", ApplyId, WS_TABSTOP);
-        Item(L"BUTTON", L"恢复目标 / Restore", RestoreId, WS_TABSTOP);
-        Item(L"BUTTON", L"停止全部 / Stop all", StopId, WS_TABSTOP);
+        Item(L"BUTTON", app::Local(L"读取顺序", L"Read order"), QueryId, WS_TABSTOP);
+        Item(L"BUTTON", app::Local(L"应用顺序", L"Apply"), ApplyId, WS_TABSTOP);
+        Item(L"BUTTON", app::Local(L"恢复目标", L"Restore"), RestoreId, WS_TABSTOP);
+        Item(L"BUTTON", app::Local(L"停止全部保持", L"Stop all maintenance"), StopId, WS_TABSTOP);
         g.log = Item(L"EDIT", L"", LogId, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_TABSTOP);
         SendMessageW(g.log, EM_SETLIMITTEXT, 200000, 0);
         Layout(); Refresh(); UpdateEnabled();
@@ -480,7 +485,7 @@ namespace
                     const auto exe = app::ExecutableDirectory() / L"DwmOrderTool.exe";
                     const auto result = reinterpret_cast<INT_PTR>(ShellExecuteW(window, L"runas", exe.c_str(), nullptr, app::ExecutableDirectory().c_str(), SW_SHOWNORMAL));
                     if (result > 32) DestroyWindow(window);
-                    else Log(L"管理员重启未完成 / Elevation was cancelled or failed.");
+                    else Log(app::Local(L"管理员重启被取消或未完成。", L"Administrator restart was cancelled or did not complete."));
                     break;
                 }
                 case RefreshId: Refresh(); break;
@@ -497,7 +502,7 @@ namespace
                 PostQuitMessage(0); return 0;
             }
         }
-        catch (...) { if (message == WM_CREATE) return -1; Log(L"界面操作失败 / UI operation failed"); }
+        catch (...) { if (message == WM_CREATE) return -1; Log(app::Local(L"界面操作失败。", L"The interface operation failed.")); }
         return DefWindowProcW(window, message, wParam, lParam);
     }
 }
@@ -526,7 +531,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
         g.dpi = GetDpiForSystem();
         MONITORINFO monitor{sizeof(monitor)};
         GetMonitorInfoW(MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY), &monitor);
-        HWND window = CreateWindowExW(WS_EX_CONTROLPARENT, L"DwmOrderWindow", L"DWM Order Tool",
+        HWND window = CreateWindowExW(WS_EX_CONTROLPARENT, L"DwmOrderWindow", app::Local(L"DWM 窗口排序", L"DWM Window Order"),
             WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
             (std::min)(Px(860), static_cast<int>(monitor.rcWork.right - monitor.rcWork.left)),
             (std::min)(Px(780), static_cast<int>(monitor.rcWork.bottom - monitor.rcWork.top)), nullptr, nullptr, instance, nullptr);
