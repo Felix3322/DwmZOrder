@@ -315,7 +315,7 @@ namespace
         g.dpi = GetDpiForWindow(g.window);
         g.font = CreateFontW(-Px(15), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
             CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        g.title = Item(L"STATIC", L"DWM Order Tool 1.0", 0);
+        g.title = Item(L"STATIC", L"DWM Order Tool 1.0.1", 0);
         g.scope = Item(L"STATIC", L"跨 Band 合成排序；鼠标命中、焦点不变。\r\nComposition order only; input and focus are unchanged.", 0);
         Item(L"BUTTON", L"管理员重启 / Elevate", AdminId, WS_TABSTOP);
         Item(L"BUTTON", L"刷新 / Refresh", RefreshId, WS_TABSTOP);

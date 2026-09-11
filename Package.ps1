@@ -27,15 +27,19 @@ New-Item -ItemType Directory -Path $output | Out-Null
 $portable=Join-Path $output 'DwmZOrder-x64'
 New-Item -ItemType Directory -Path $portable | Out-Null
 foreach ($file in $required) { Copy-Item -LiteralPath (Join-Path $bin $file) -Destination $portable }
-foreach ($file in @('README.md','LICENSE','SUPPORT.md','source-manifest.json')) { Copy-Item -LiteralPath (Join-Path $root $file) -Destination $portable }
+foreach ($file in @('README.md','LICENSE','NOTICE.md','SUPPORT.md','source-manifest.json')) { Copy-Item -LiteralPath (Join-Path $root $file) -Destination $portable }
 Copy-Item -LiteralPath (Join-Path $root 'build/Release-receipt.json') -Destination (Join-Path $portable 'build-receipt.json')
 $hashes=foreach ($file in $required) { $h=Get-FileHash -LiteralPath (Join-Path $portable $file) -Algorithm SHA256; "$($h.Hash)  $file" }
 $hashes | Set-Content -LiteralPath (Join-Path $portable 'SHA256SUMS.txt') -Encoding ascii
 Compress-Archive -LiteralPath $portable -DestinationPath (Join-Path $output 'DwmZOrder-x64.zip') -CompressionLevel Optimal
-$sourceEntries=@('CMakeLists.txt','Main.cpp','app.rc','app.manifest','Build.ps1','Package.ps1','README.md','LICENSE','SUPPORT.md','source-manifest.json','.gitignore') | ForEach-Object { Join-Path $root $_ }
-$sourceEntries+=@(Get-ChildItem -LiteralPath (Join-Path $root 'core') -Recurse -File | Where-Object { $_.FullName -notmatch '\\tests\\' } | ForEach-Object { $_.FullName })
-Compress-Archive -LiteralPath $sourceEntries -DestinationPath (Join-Path $output 'DwmZOrder-source.zip') -CompressionLevel Optimal
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+$sourcePaths=@($sourceManifest | ForEach-Object { $_.path }) + @('source-manifest.json')
+$sourceZip=[IO.Compression.ZipFile]::Open((Join-Path $output 'DwmZOrder-source.zip'), [IO.Compression.ZipArchiveMode]::Create)
+try {
+    foreach ($relative in $sourcePaths) {
+        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($sourceZip, (Join-Path $root $relative), $relative.Replace('\','/'), [IO.Compression.CompressionLevel]::Optimal) | Out-Null
+    }
+} finally { $sourceZip.Dispose() }
 foreach ($zip in @('DwmZOrder-x64.zip','DwmZOrder-source.zip')) {
     $archive=[IO.Compression.ZipFile]::OpenRead((Join-Path $output $zip))
     try {

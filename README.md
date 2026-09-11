@@ -24,4 +24,10 @@ powershell -ExecutionPolicy Bypass -File .\Package.ps1 -Destination '..\DwmZOrde
 
 构建输出位于 `build/bin/Release/`。打包脚本会校验源文件清单和构建回执，生成可运行的 `DwmZOrder-x64.zip` 及对应源码包；包内不含 PDB、系统 DLL 或构建缓存。
 
-完整许可条款见 [LICENSE](LICENSE)。
+## 许可证
+
+本程序由 KSword 版权所有者另行授权，采用 **GPL-3.0-only**，因此采用不同于 KSword 主项目的许可证。此授权仅适用于 DwmZOrder，不改变 KSword 主项目的许可证。
+
+版权与授权声明见 [NOTICE.md](NOTICE.md)，完整许可条款见 [LICENSE](LICENSE)。
+
+如果你想尝试我们完整的高级系统维护工具，包含更多这样的功能，可以尝试 [KSword](https://github.com/KSwordDEV/KSword)。
