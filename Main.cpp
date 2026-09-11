@@ -16,6 +16,11 @@
 
 namespace app
 {
+    const wchar_t* Local(const wchar_t* zh, const wchar_t* en)
+    {
+        return PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_CHINESE ? zh : en;
+    }
+
     struct Operation
     {
         ks::dwm_order::Request request;
@@ -58,22 +63,105 @@ namespace app
         using S = ks::dwm_order::Status;
         switch (status)
         {
-        case S::Ok: return L"回执成功 / OK";
-        case S::InvalidRequest: return L"请求无效 / Invalid request";
-        case S::InvalidWindow: return L"窗口失效或身份变化 / Invalid window";
-        case S::DifferentDesktop: return L"窗口不在同一桌面 / Different desktop";
-        case S::UnsupportedRuntime: return L"当前 DWM 模型不支持 / Unsupported DWM runtime";
-        case S::HookConflict: return L"排序回调冲突 / Hook conflict";
-        case S::WindowNotComposed: return L"窗口未参与合成 / Window not composed";
-        case S::NativeFailure: return L"内部调用失败，可能部分生效 / Native failure, possibly partial";
-        case S::VerificationFailed: return L"回读未通过 / Verification failed";
-        case S::NotRunning: return L"代理未运行 / Agent not running";
-        case S::AgentMismatch: return L"代理版本不同，请注销后重试 / Agent mismatch; sign out and retry";
-        case S::TransportFailure: return L"连接或加载失败 / Transport failure";
-        case S::Timeout: return L"超时，结果未知 / Timeout, outcome unknown";
-        case S::InternalException: return L"代理异常，结果未知 / Agent exception, outcome unknown";
+        case S::Ok: return Local(L"操作完成。", L"Operation completed.");
+        case S::InvalidRequest: return Local(L"请求参数无效，请重新选择窗口和位置。", L"Invalid request. Select the window and position again.");
+        case S::InvalidWindow: return Local(L"窗口已关闭或发生变化，请刷新窗口列表后重新选择。", L"The window has closed or changed. Refresh the list and select it again.");
+        case S::DifferentDesktop: return Local(L"目标与参照不在同一桌面，请选择同一桌面的窗口。", L"Select a target and reference on the same desktop.");
+        case S::UnsupportedRuntime: return Local(L"此系统版本的窗口排序功能暂不受支持。", L"Window ordering is not supported on this system version.");
+        case S::HookConflict: return Local(L"检测到排序控制冲突，无法完成操作。", L"A conflicting ordering hook prevented the operation.");
+        case S::WindowNotComposed: return Local(L"无法在 DWM 排序列表中找到此窗口，请显示窗口后刷新重试。", L"This window was not found in DWM's ordering list. Show the window, then refresh and retry.");
+        case S::NativeFailure: return Local(L"排序调用失败，部分修改可能已生效。请先读取当前顺序。", L"An ordering call failed; some changes may have taken effect. Read the current order first.");
+        case S::VerificationFailed: return Local(L"无法确认窗口顺序，不能判定操作成功。请重新读取顺序。", L"The window order could not be confirmed. Read the order again before assuming success.");
+        case S::NotRunning: return Local(L"排序服务尚未运行。请先读取顺序或应用排序。", L"The ordering agent is not running. Read the order or apply a position first.");
+        case S::AgentMismatch: return Local(L"系统中仍加载着另一版本的排序模块，请注销并重新登录后再试。", L"A different agent version is still loaded. Sign out and sign back in before retrying.");
+        case S::TransportFailure: return Local(L"无法连接窗口排序服务，请确认管理员权限和程序同目录的 DwmZOrder.dll。", L"Could not connect to the ordering agent. Check administrator privileges and DwmZOrder.dll beside the program.");
+        case S::Timeout: return Local(L"等待操作完成超时，目前无法确认结果。请先读取顺序，避免重复应用。", L"The operation timed out and its result is unknown. Read the order before applying again.");
+        case S::InternalException: return Local(L"排序模块发生异常，目前无法确认结果。请先读取当前顺序。", L"The ordering agent encountered an exception; the result is unknown. Read the current order first.");
         }
-        return L"未知状态 / Unknown status";
+        return Local(L"收到无法识别的操作结果。", L"An unrecognized result was returned.");
+    }
+
+    std::wstring ResultText(const Operation& op, const std::wstring& target, const std::wstring& reference)
+    {
+        using namespace ks::dwm_order;
+        const auto& q = op.request;
+        const auto& reply = op.reply;
+        const auto& r = reply.response;
+        std::wostringstream out;
+        const bool confirmed = r.status == Status::Ok && (r.flags & Verified);
+        if (confirmed)
+        {
+            switch (q.action)
+            {
+            case Action::Query: out << Local(L"已读取窗口顺序。", L"Window order read successfully."); break;
+            case Action::Apply:
+                switch (q.position)
+                {
+                case Position::Front: out << Local(L"已将目标窗口移到最前方。", L"The target window was moved to the front."); break;
+                case Position::Back: out << Local(L"已将目标窗口移到最后方。", L"The target window was moved to the back."); break;
+                case Position::Before: out << Local(L"已将目标窗口移到参照窗口上方。", L"The target window was moved above the reference."); break;
+                case Position::After: out << Local(L"已将目标窗口移到参照窗口下方。", L"The target window was moved below the reference."); break;
+                }
+                break;
+            case Action::Restore: out << Local(L"已将目标窗口恢复为 Windows 当前的排序。", L"The target window was restored to the current Windows order."); break;
+            case Action::Stop: out << Local(L"已停止本会话的全部持续保持，并恢复系统顺序。", L"All maintained ordering in this session has stopped and system order has been restored."); break;
+            }
+        }
+        else
+            out << StatusText(r.status == Status::Ok ? Status::VerificationFailed : r.status);
+
+        if (q.action != Action::Stop)
+        {
+            out << L"\r\n\r\n" << Local(L"目标窗口：", L"Target window: ") << target;
+            if (q.action == Action::Apply && q.position >= Position::Before)
+                out << L"\r\n" << Local(L"参照窗口：", L"Reference window: ") << reference;
+        }
+        if (confirmed && q.action != Action::Stop && r.windowCount && r.index < r.windowCount)
+        {
+            out << L"\r\n" << Local(L"DWM 中的顺序：第 ", L"Position in DWM: ") << r.index + 1;
+            out << Local(L" 位", L"");
+            if (!r.index) out << Local(L"（最前方）", L" (frontmost)");
+            else if (r.index + 1 == r.windowCount) out << Local(L"（最后方）", L" (backmost)");
+            out << L"\r\n" << Local(L"排序列表共 ", L"The ordering list contains ") << r.windowCount
+                << Local(L" 项，不等于屏幕上可见窗口的数量。", L" entries; this is not the number of visible windows on screen.");
+        }
+        if (confirmed && q.action != Action::Stop)
+        {
+            out << L"\r\n";
+            if ((r.flags & Maintaining) && r.maintainedWindow == q.target.hwnd)
+            {
+                if (r.maintenanceStatus == Status::Ok)
+                    out << Local(L"持续保持：已开启，会在系统更新顺序时重新应用设定。", L"Maintain: on. The chosen order is reapplied when the system updates it.");
+                else
+                    out << Local(L"持续保持：最近一次更新失败。", L"Maintain: the last update failed.") << L" " << StatusText(r.maintenanceStatus);
+            }
+            else if (r.flags & Maintaining)
+                out << Local(L"此目标未开启持续保持；另一个窗口正在被保持。", L"This target is not maintained; another window is being maintained.");
+            else
+                out << Local(L"持续保持：未开启，窗口顺序可能随其他操作改变。", L"Maintain: off. Other operations may change the window order.");
+        }
+        if (q.action == Action::Query)
+            out << L"\r\n\r\n" << Local(L"本次只读取顺序，没有移动窗口。要更改位置，请点击“应用顺序”。", L"This request only reads the order; it does not move the window. Click Apply to change its position.");
+        if (!confirmed)
+        {
+            out << L"\r\n\r\n" << Local(L"失败环节：", L"Failed step: ");
+            switch (reply.stage)
+            {
+            case Stage::Window: out << Local(L"检查窗口", L"checking the window"); break;
+            case Stage::AgentFile: out << Local(L"检查排序模块文件", L"checking the agent file"); break;
+            case Stage::DwmProcess: out << Local(L"连接 DWM 进程", L"connecting to DWM"); break;
+            case Stage::PrepareAgent: out << Local(L"准备排序模块", L"preparing the agent"); break;
+            case Stage::LoadAgent: out << Local(L"加载排序模块", L"loading the agent"); break;
+            case Stage::Request: out << Local(L"执行排序请求", L"executing the request"); break;
+            case Stage::Receipt: out << Local(L"确认操作结果", L"confirming the result"); break;
+            }
+            if (reply.error) out << L"; Win32 " << reply.error;
+            if (r.win32Error) out << L"; agent Win32 " << r.win32Error;
+            if (r.nativeResult) out << L"; HRESULT 0x" << std::hex << static_cast<std::uint32_t>(r.nativeResult);
+            if (reply.loaderThreadExitCode) out << L"; loader exit 0x" << std::hex << reply.loaderThreadExitCode;
+            if (reply.requestThreadExitCode) out << L"; request exit 0x" << std::hex << reply.requestThreadExitCode;
+        }
+        return out.str();
     }
 }
 
@@ -87,6 +175,7 @@ namespace
     {
         HWND owner = nullptr;
         app::Operation operation;
+        std::wstring targetTitle, referenceTitle;
         std::wstring error;
         bool closeAfterRestore = false;
     };
@@ -220,6 +309,17 @@ namespace
         g.busy = true;
         g.job = job;
         job->owner = g.window;
+        auto caption = [](std::uint64_t hwnd)
+        {
+            wchar_t title[256]{};
+            GetWindowTextW(reinterpret_cast<HWND>(hwnd), title, 256);
+            if (title[0]) return std::wstring(title);
+            std::wostringstream text;
+            text << app::Local(L"窗口 0x", L"Window 0x") << std::hex << hwnd;
+            return text.str();
+        };
+        job->targetTitle = caption(job->operation.request.target.hwnd);
+        job->referenceTitle = caption(job->operation.request.reference.hwnd);
         UpdateEnabled();
         Log(L"正在处理，请稍候… / Working…\r\n操作期间仍可移动窗口。 / The window remains responsive.");
         try
@@ -294,10 +394,7 @@ namespace
             if (q.action == Action::Apply && q.maintain && (r.maintainedWindow == q.target.hwnd
                 || r.status == Status::Timeout || r.status == Status::InternalException)) g.held = q.target;
             if (r.dwmProcessId && !(r.flags & Maintaining) && r.status == Status::Ok) g.held = {};
-            std::wstring text = app::StatusText(r.status) + L"\r\n";
-            if (r.flags & Maintaining) text += L"持续保持中 / Maintaining\r\n";
-            if (r.windowCount) text += L"合成位置 / Position: " + std::to_wstring(r.index + 1) + L" / " + std::to_wstring(r.windowCount) + L" (1 = 最前 / front)\r\n";
-            Log(text);
+            Log(app::ResultText(job->operation, job->targetTitle, job->referenceTitle));
         }
         if (!job->error.empty()) Log(job->error);
         UpdateEnabled();
@@ -315,7 +412,7 @@ namespace
         g.dpi = GetDpiForWindow(g.window);
         g.font = CreateFontW(-Px(15), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
             CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        g.title = Item(L"STATIC", L"DWM Order Tool 1.0.1", 0);
+        g.title = Item(L"STATIC", L"DWM Order Tool 1.0.2", 0);
         g.scope = Item(L"STATIC", L"跨 Band 合成排序；鼠标命中、焦点不变。\r\nComposition order only; input and focus are unchanged.", 0);
         Item(L"BUTTON", L"管理员重启 / Elevate", AdminId, WS_TABSTOP);
         Item(L"BUTTON", L"刷新 / Refresh", RefreshId, WS_TABSTOP);
@@ -331,13 +428,15 @@ namespace
         SendMessageW(g.position, CB_SETCURSEL, 0, 0);
         g.maintain = Item(L"BUTTON", L"持续保持 / Maintain", MaintainId, BS_AUTOCHECKBOX | WS_TABSTOP);
         SendMessageW(g.maintain, BM_SETCHECK, BST_UNCHECKED, 0);
-        Item(L"BUTTON", L"连接读取 / Query", QueryId, WS_TABSTOP);
+        Item(L"BUTTON", L"读取顺序 / Read order", QueryId, WS_TABSTOP);
         Item(L"BUTTON", L"应用顺序 / Apply", ApplyId, WS_TABSTOP);
         Item(L"BUTTON", L"恢复目标 / Restore", RestoreId, WS_TABSTOP);
         Item(L"BUTTON", L"停止全部 / Stop all", StopId, WS_TABSTOP);
         g.log = Item(L"EDIT", L"", LogId, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_TABSTOP);
         SendMessageW(g.log, EM_SETLIMITTEXT, 200000, 0);
         Layout(); Refresh(); UpdateEnabled();
+        Log(app::Local(L"请选择目标窗口。\r\n\r\n点击“读取顺序”查看它当前的位置。\r\n选择位置后点击“应用顺序”，才会调整窗口的显示顺序。",
+            L"Select a target window.\r\n\r\nClick Read order to see its current position.\r\nChoose a position and click Apply to change its display order."));
     }
 
     LRESULT CALLBACK MainWindow(HWND window, UINT message, WPARAM wParam, LPARAM lParam)

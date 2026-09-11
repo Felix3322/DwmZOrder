@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(DwmOrderTool VERSION 1.0.1 LANGUAGES CXX ASM_MASM RC)
+project(DwmOrderTool VERSION 1.0.2 LANGUAGES CXX ASM_MASM RC)
 if(NOT MSVC OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8 OR CMAKE_GENERATOR_PLATFORM MATCHES "ARM")
   message(FATAL_ERROR "Use MSVC with the x64 platform (Visual Studio 2022 / Build Tools).")
 endif()
