@@ -1,17 +1,17 @@
 #include "DwmZOrderClient.h"
 #include "DwmAgentDeployment.h"
-#include "../../../shared/window/DwmRemoteLoader.h"
+#include "../shared/window/DwmRemoteLoader.h"
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
 #include <TlHelp32.h>
-#include "../../../shared/window/DwmProcessIdentity.h"
+#include "../shared/window/DwmProcessIdentity.h"
 #include <algorithm>
 #include <cstring>
 #include <cwchar>
 #include <vector>
 
-extern "C" const unsigned char KswordDwmLoadStart[], KswordDwmLoadEnd[];
+extern "C" const unsigned char DwmLoadStart[], DwmLoadEnd[];
 
 namespace ks::dwm_order
 {
@@ -339,7 +339,7 @@ namespace ks::dwm_order
         if (packet.addFunctionTable) packet.deleteFunctionTable = RemoteFunction(process, processId, "RtlDeleteFunctionTable", error);
         if (!packet.deleteFunctionTable) { result.error = error; return result; }
 
-        const unsigned char* codeStart = KswordDwmLoadStart;
+        const unsigned char* codeStart = DwmLoadStart;
         // MSVC incremental links can redirect even an assembly code label via an ILT.
         // Resolve only that local rel32 jump, then validate the actual routine layout.
         if (codeStart[0] == 0xe9)
@@ -348,7 +348,7 @@ namespace ks::dwm_order
             std::memcpy(&displacement, codeStart + 1, sizeof(displacement));
             codeStart += 5 + displacement;
         }
-        const auto codeSize = reinterpret_cast<std::uintptr_t>(KswordDwmLoadEnd)
+        const auto codeSize = reinterpret_cast<std::uintptr_t>(DwmLoadEnd)
             - reinterpret_cast<std::uintptr_t>(codeStart);
         const unsigned char prologue[] = {0x53, 0x48, 0x83, 0xec, 0x20};
         if (codeSize < sizeof(prologue) || codeSize > 512
@@ -446,7 +446,7 @@ namespace ks::dwm_order
         if (!mapped) return fail(Stage::AgentFile, GetLastError());
         auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(mapped);
         auto* nt = reinterpret_cast<IMAGE_NT_HEADERS64*>(reinterpret_cast<unsigned char*>(mapped) + dos->e_lfanew);
-        const auto entry = GetProcAddress(mapped, "KswordDwmZOrderRequest");
+        const auto entry = GetProcAddress(mapped, "DwmZOrderRequest");
         const DWORD imageSize = nt->OptionalHeader.SizeOfImage;
         const DWORD timestamp = nt->FileHeader.TimeDateStamp;
         const auto entryRva = reinterpret_cast<std::uintptr_t>(entry) - reinterpret_cast<std::uintptr_t>(mapped);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../../shared/window/DwmZOrderProtocol.h"
+#include "../shared/window/DwmZOrderProtocol.h"
 #include <string>
 
 namespace ks::dwm_order

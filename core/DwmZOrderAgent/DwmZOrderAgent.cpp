@@ -511,7 +511,7 @@ namespace ks::dwm_order
     }
 }
 
-extern "C" __declspec(dllexport) DWORD WINAPI KswordDwmZOrderRequest(void* parameter)
+extern "C" __declspec(dllexport) DWORD WINAPI DwmZOrderRequest(void* parameter)
 {
     using namespace ks::dwm_order;
     if (!parameter) return ERROR_INVALID_PARAMETER;

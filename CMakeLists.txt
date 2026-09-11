@@ -12,19 +12,20 @@ if(NOT EXISTS "${CORE}/DwmZOrderAgent/RuntimeResolver.cpp")
   message(FATAL_ERROR "The independent source tree is incomplete: core/DwmZOrderAgent is missing.")
 endif()
 set(AGENT "${CORE}/DwmZOrderAgent")
-set(CLIENT "${CORE}/Ksword5.1/Ksword5.1/OtherDock")
+set(CLIENT "${CORE}/client")
 function(configure_native target)
   target_compile_definitions(${target} PRIVATE UNICODE _UNICODE)
   target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:/W4;/WX;/utf-8;/guard:cf>")
   target_link_options(${target} PRIVATE /guard:cf /DYNAMICBASE /NXCOMPAT)
   target_include_directories(${target} PRIVATE "${AGENT}" "${CLIENT}" "${CORE}/shared/window")
 endfunction()
-add_library(KswordDwmZOrder SHARED "${AGENT}/DwmZOrderAgent.cpp" "${AGENT}/RuntimeResolver.cpp"
+add_library(DwmZOrderAgent SHARED "${AGENT}/DwmZOrderAgent.cpp" "${AGENT}/RuntimeResolver.cpp"
   "${AGENT}/RuntimeResolver.h" "${AGENT}/RuntimeSignatures.h" "${AGENT}/RuntimeWin10Signatures.h"
   "${AGENT}/NativeQueries.h" "${AGENT}/OrderPlan.h")
-configure_native(KswordDwmZOrder)
-target_link_libraries(KswordDwmZOrder PRIVATE user32 advapi32)
-target_link_options(KswordDwmZOrder PRIVATE /MANIFESTUAC:NO)
+configure_native(DwmZOrderAgent)
+set_target_properties(DwmZOrderAgent PROPERTIES OUTPUT_NAME "DwmZOrder")
+target_link_libraries(DwmZOrderAgent PRIVATE user32 advapi32)
+target_link_options(DwmZOrderAgent PRIVATE /MANIFESTUAC:NO)
 add_library(DwmClient STATIC "${CLIENT}/DwmZOrderClient.cpp" "${CLIENT}/DwmAgentDeployment.cpp"
   "${CLIENT}/DwmRemoteLoader.asm" "${CLIENT}/DwmZOrderClient.h" "${CLIENT}/DwmAgentDeployment.h"
   "${CORE}/shared/window/DwmZOrderProtocol.h" "${CORE}/shared/window/DwmRemoteLoader.h"
@@ -36,5 +37,5 @@ configure_native(DwmOrderTool)
 target_link_libraries(DwmOrderTool PRIVATE DwmClient comctl32 comdlg32 shell32 version)
 target_link_options(DwmOrderTool PRIVATE /MANIFEST:NO)
 target_sources(DwmOrderTool PRIVATE "${AGENT}/RuntimeResolver.cpp")
-add_dependencies(DwmOrderTool KswordDwmZOrder)
+add_dependencies(DwmOrderTool DwmZOrderAgent)
 source_group("Application" FILES Main.cpp app.rc app.manifest)

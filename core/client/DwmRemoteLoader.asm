@@ -1,13 +1,13 @@
 ; Position-independent x64 LoadLibraryExW receipt. No imports or global references.
 ; LoaderPacket offsets are asserted in shared/window/DwmRemoteLoader.h.
 ; Keep the five-byte prologue in sync with the copied UNWIND_INFO in the client.
-PUBLIC KswordDwmLoadStart
-PUBLIC KswordDwmLoadEnd
+PUBLIC DwmLoadStart
+PUBLIC DwmLoadEnd
 
 .code
 ; The client resolves a possible incremental-link thunk before copying this range.
-KswordDwmLoadStart LABEL BYTE
-KswordDwmLoadRoutine PROC FRAME
+DwmLoadStart LABEL BYTE
+DwmLoadRoutine PROC FRAME
     push rbx
     .pushreg rbx
     sub rsp, 20h
@@ -50,6 +50,6 @@ done:
     add rsp, 20h
     pop rbx
     ret
-KswordDwmLoadRoutine ENDP
-KswordDwmLoadEnd LABEL BYTE
+DwmLoadRoutine ENDP
+DwmLoadEnd LABEL BYTE
 END

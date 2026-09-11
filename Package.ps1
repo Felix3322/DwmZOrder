@@ -1,11 +1,11 @@
 param([Parameter(Mandatory=$true)][string]$Destination)
 $ErrorActionPreference='Stop'
 $root=[IO.Path]::GetFullPath($PSScriptRoot)
-if (!(Test-Path -LiteralPath (Join-Path $root 'core/DwmZOrderAgent'))) { throw 'The independent source tree is incomplete.' }
+if (!(Test-Path -LiteralPath (Join-Path $root 'core/DwmZOrderAgent'))) { throw 'The source tree is incomplete.' }
 $output=[IO.Path]::GetFullPath($Destination)
 if (Test-Path -LiteralPath $output) { throw 'Choose a new package destination to avoid replacing another release.' }
 $bin=Join-Path $root 'build/bin/Release'
-$required=@('DwmOrderTool.exe','KswordDwmZOrder.dll')
+$required=@('DwmOrderTool.exe','DwmZOrder.dll')
 foreach ($file in $required) { if (!(Test-Path -LiteralPath (Join-Path $bin $file))) { throw "Build Release first: $file" } }
 # A stale source tree must not silently enter a release package.
 $sourceManifest=Get-Content -LiteralPath (Join-Path $root 'source-manifest.json') -Raw | ConvertFrom-Json
@@ -45,5 +45,5 @@ foreach ($zip in @('DwmZOrder-x64.zip','DwmZOrder-source.zip')) {
         if ($zip -like '*source*' -and @($archive.Entries | Where-Object { $_.FullName -match '(^|/|\\)(build|\.deps)(/|\\)' }).Count) { throw 'Source package unexpectedly contains build/dependency artifacts.' }
     } finally { $archive.Dispose() }
 }
-Write-Output "STANDALONE_PACKAGE=$output"
+Write-Output "PACKAGE=$output"
 Get-Item -LiteralPath (Join-Path $output 'DwmZOrder-x64.zip'),(Join-Path $output 'DwmZOrder-source.zip') | Select-Object Name,Length

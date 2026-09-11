@@ -25,14 +25,14 @@ if ($LASTEXITCODE) { throw "CMake configure failed: $LASTEXITCODE" }
 & $cmake --build $build --config $Configuration --parallel 2
 if ($LASTEXITCODE) { throw "Build failed: $LASTEXITCODE" }
 $bin=Join-Path $build "bin/$Configuration"
-foreach ($name in @('DwmOrderTool.exe','KswordDwmZOrder.dll')) {
+foreach ($name in @('DwmOrderTool.exe','DwmZOrder.dll')) {
     $file=Get-Item -LiteralPath (Join-Path $bin $name)
     if ($file.Length -eq 0) { throw "Empty output: $name" }
 }
 foreach ($inputFile in $sourceInputs) {
     if ((Get-FileHash -LiteralPath (Join-Path $PSScriptRoot $inputFile.path) -Algorithm SHA256).Hash -ne $inputFile.sha256) { throw "Source changed during build: $($inputFile.path)" }
 }
-$outputHashes=@(foreach ($name in @('DwmOrderTool.exe','KswordDwmZOrder.dll')) { @{path=$name;sha256=(Get-FileHash -LiteralPath (Join-Path $bin $name) -Algorithm SHA256).Hash} })
+$outputHashes=@(foreach ($name in @('DwmOrderTool.exe','DwmZOrder.dll')) { @{path=$name;sha256=(Get-FileHash -LiteralPath (Join-Path $bin $name) -Algorithm SHA256).Hash} })
 @{configuration=$Configuration;inputs=$sourceInputs;outputs=$outputHashes;buildVerified=$true} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $build "$Configuration-receipt.json") -Encoding UTF8
-Write-Output "STANDALONE_BUILD=SUCCESS"
+Write-Output "BUILD=SUCCESS"
 Write-Output "BIN=$bin"

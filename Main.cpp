@@ -14,7 +14,7 @@
 #include <stdexcept>
 #include <thread>
 
-namespace standalone
+namespace app
 {
     struct Operation
     {
@@ -86,7 +86,7 @@ namespace
     struct Job
     {
         HWND owner = nullptr;
-        standalone::Operation operation;
+        app::Operation operation;
         std::wstring error;
         bool closeAfterRestore = false;
     };
@@ -156,7 +156,7 @@ namespace
         for (HWND input : g.inputs) EnableWindow(input, !g.busy);
         if (!g.busy)
         {
-            const bool elevated = standalone::IsAdministrator();
+            const bool elevated = app::IsAdministrator();
             for (int id : {QueryId, ApplyId, RestoreId, StopId}) EnableWindow(GetDlgItem(g.window, id), elevated);
             EnableWindow(GetDlgItem(g.window, AdminId), !elevated);
             EnableWindow(g.reference, SendMessageW(g.position, CB_GETCURSEL, 0, 0) >= 2);
@@ -228,8 +228,8 @@ namespace
             {
                 try
                 {
-                    job->operation.time = standalone::Timestamp();
-                    job->operation.reply = ExecuteRequest(job->operation.request, (standalone::ExecutableDirectory() / L"KswordDwmZOrder.dll").wstring());
+                    job->operation.time = app::Timestamp();
+                    job->operation.reply = ExecuteRequest(job->operation.request, (app::ExecutableDirectory() / L"DwmZOrder.dll").wstring());
                 }
                 catch (const std::exception& e)
                 {
@@ -257,7 +257,7 @@ namespace
             && (!Identity(g.reference, request.reference) || request.reference.hwnd == request.target.hwnd))
         { Log(L"请选择同一桌面上的另一个参照窗口。\r\nSelect another reference window on the same desktop."); return; }
         if (action == Action::Stop && MessageBoxW(g.window,
-            L"将停止当前会话排序代理的全部保持（包括 KSword 设置的保持），并恢复系统顺序。\nStop all ordering maintenance in this session, including KSword, and restore system order?",
+            L"将停止当前会话排序代理的全部保持，并恢复系统顺序。\nStop all ordering maintenance in this session and restore system order?",
             L"停止全部 / Stop all", MB_OKCANCEL | MB_ICONQUESTION) != IDOK) return;
         Begin(job);
     }
@@ -294,7 +294,7 @@ namespace
             if (q.action == Action::Apply && q.maintain && (r.maintainedWindow == q.target.hwnd
                 || r.status == Status::Timeout || r.status == Status::InternalException)) g.held = q.target;
             if (r.dwmProcessId && !(r.flags & Maintaining) && r.status == Status::Ok) g.held = {};
-            std::wstring text = standalone::StatusText(r.status) + L"\r\n";
+            std::wstring text = app::StatusText(r.status) + L"\r\n";
             if (r.flags & Maintaining) text += L"持续保持中 / Maintaining\r\n";
             if (r.windowCount) text += L"合成位置 / Position: " + std::to_wstring(r.index + 1) + L" / " + std::to_wstring(r.windowCount) + L" (1 = 最前 / front)\r\n";
             Log(text);
@@ -315,8 +315,8 @@ namespace
         g.dpi = GetDpiForWindow(g.window);
         g.font = CreateFontW(-Px(15), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
             CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-        g.title = Item(L"STATIC", L"DWM Order Tool 1.0  ·  独立窗口排序工具", 0);
-        g.scope = Item(L"STATIC", L"Win11 24H2 x64；Win10 19041 系列 x64（实验性 / experimental）。\r\n跨 Band 合成排序；鼠标命中、焦点不变。 / Composition order only; input and focus are unchanged.", 0);
+        g.title = Item(L"STATIC", L"DWM Order Tool 1.0", 0);
+        g.scope = Item(L"STATIC", L"跨 Band 合成排序；鼠标命中、焦点不变。\r\nComposition order only; input and focus are unchanged.", 0);
         Item(L"BUTTON", L"管理员重启 / Elevate", AdminId, WS_TABSTOP);
         Item(L"BUTTON", L"刷新 / Refresh", RefreshId, WS_TABSTOP);
         g.targetLabel = Item(L"STATIC", L"目标 / Target", 0);
@@ -378,8 +378,8 @@ namespace
                 {
                 case AdminId:
                 {
-                    const auto exe = standalone::ExecutableDirectory() / L"DwmOrderTool.exe";
-                    const auto result = reinterpret_cast<INT_PTR>(ShellExecuteW(window, L"runas", exe.c_str(), nullptr, standalone::ExecutableDirectory().c_str(), SW_SHOWNORMAL));
+                    const auto exe = app::ExecutableDirectory() / L"DwmOrderTool.exe";
+                    const auto result = reinterpret_cast<INT_PTR>(ShellExecuteW(window, L"runas", exe.c_str(), nullptr, app::ExecutableDirectory().c_str(), SW_SHOWNORMAL));
                     if (result > 32) DestroyWindow(window);
                     else Log(L"管理员重启未完成 / Elevation was cancelled or failed.");
                     break;
@@ -422,12 +422,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show)
         WNDCLASSEXW cls{sizeof(cls)};
         cls.hInstance = instance; cls.hCursor = LoadCursorW(nullptr, IDC_ARROW);
         cls.hIcon = LoadIconW(nullptr, IDI_APPLICATION); cls.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
-        cls.lpfnWndProc = MainWindow; cls.lpszClassName = L"DwmOrderStandalone";
+        cls.lpfnWndProc = MainWindow; cls.lpszClassName = L"DwmOrderWindow";
         if (!RegisterClassExW(&cls)) return 1;
         g.dpi = GetDpiForSystem();
         MONITORINFO monitor{sizeof(monitor)};
         GetMonitorInfoW(MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY), &monitor);
-        HWND window = CreateWindowExW(WS_EX_CONTROLPARENT, L"DwmOrderStandalone", L"DWM Order Tool / 独立窗口排序工具",
+        HWND window = CreateWindowExW(WS_EX_CONTROLPARENT, L"DwmOrderWindow", L"DWM Order Tool",
             WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
             (std::min)(Px(860), static_cast<int>(monitor.rcWork.right - monitor.rcWork.left)),
             (std::min)(Px(780), static_cast<int>(monitor.rcWork.bottom - monitor.rcWork.top)), nullptr, nullptr, instance, nullptr);
